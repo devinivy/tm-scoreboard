@@ -4,13 +4,45 @@
  */
 
 (function () {
-  var contestants = restore();
-
   var locked = false;
 
   var main = document.querySelector("main");
   var fileInput = document.querySelector("#file-input");
   var playButton = document.querySelector("#play-button");
+  var contestants = restore();
+
+  function blobToBase64(blob) {
+    const reader = new FileReader();
+    reader.readAsDataURL(blob);
+    return new Promise((resolve) => {
+      reader.onloadend = () => {
+        resolve(reader.result);
+      };
+    });
+  }
+
+  function persist() {
+    localStorage.setItem(
+      "tm-scoreboard.contestants",
+      JSON.stringify(
+        contestants.map(({ el, image, ...con }) => ({
+          ...con,
+          image,
+        })),
+      ),
+    );
+  }
+
+  function restore() {
+    var persisted = localStorage.getItem("tm-scoreboard.contestants");
+    if (!persisted) {
+      contestants = [];
+      persist();
+    } else {
+      contestants = JSON.parse(persisted);
+    }
+    return contestants;
+  }
 
   function addContestant(image) {
     var contestant = {};
@@ -20,12 +52,13 @@
     contestant.oldScore = 0;
 
     contestants.push(contestant);
-
+    persist();
     return contestants.length;
   }
 
   function removeContestant(idx) {
     contestants.splice(idx, 1);
+    persist();
   }
 
   function createContestantEl(con, id) {
@@ -56,7 +89,8 @@
     frame.addEventListener("click", function () {
       var cb = function (evt) {
         if (fileInput.files && fileInput.files[0]) {
-          con.image = URL.createObjectURL(fileInput.files[0]);
+          con.image = URL.createObjectURL(fileInput.files[0]); // @TODO persist blobs, indexeddb
+          persist();
           fill.style.backgroundImage = "url(" + con.image + ")";
         }
         fileInput.removeEventListener("change", cb);
@@ -126,6 +160,7 @@
 
       if (con.score != score) {
         con.score = score;
+        persist();
         showPlay();
       }
     };
@@ -289,6 +324,7 @@
           for (var i = 0, l = contestants.length; i < l; ++i) {
             var con = contestants[i];
             con.oldScore = con.score;
+            persist();
           }
         }
       };
@@ -300,9 +336,14 @@
 
   playButton.addEventListener("mouseup", play);
 
-  for (var i = 0; i < 5; ++i) addContestant();
+  if (!contestants.length) {
+    for (var i = 0; i < 5; ++i) addContestant();
+  }
 
   refreshContestants();
+  if (contestants.some((con) => con.oldScore !== con.score)) {
+    showPlay();
+  }
 
   function resize(rep) {
     var w = window.innerWidth;
